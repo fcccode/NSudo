@@ -899,16 +899,6 @@ private:
 		//设置默认项"TrustedInstaller"
 		SendMessageW(this->m_hUserName, CB_SETCURSEL, 3, 0);
 
-		for (std::pair<std::wstring, std::wstring> Item
-			: g_ResourceManagement.ShortCutList)
-		{
-			SendMessageW(
-				this->m_hszPath,
-				CB_INSERTSTRING,
-				0,
-				(LPARAM)Item.first.c_str());
-		}
-
 		return TRUE;
 	}
 
@@ -1061,7 +1051,6 @@ private:
 				UnresolvedCommandLine);
 
 			NSUDO_MESSAGE message = NSudoCommandLineParser(
-				true,
 				true,
 				ApplicationName,
 				OptionsAndParameters,
