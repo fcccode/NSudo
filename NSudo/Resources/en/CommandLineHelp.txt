@@ -1,4 +1,4 @@
-﻿Format: NSudo [ Options and parameters ] Command line or ShortCut Command
+﻿Format: NSudo [ Options and parameters ] Command line
 
 Options:
 
@@ -63,10 +63,6 @@ include the "-UseCurrentConsole" parameter.
 -? Show this content.
 -H Show this content.
 -Help Show this content.
-
-Context Menu:
-  -Install   Copy NSudo to the Windows directory and add the context menu.
-  -Uninstall Remove NSudo in the Windows directory and the context menu. 
 
 PS:
     1. All NSudo command arguments is case-insensitive.

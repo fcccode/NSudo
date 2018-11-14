@@ -34,7 +34,6 @@ private:
 	std::wstring m_AppPath;
 
 	std::map<std::string, std::wstring> m_StringTranslations;
-	std::map<std::wstring, std::wstring> m_ShortCutList;
 
 	bool m_IsElevated = false;
 	HANDLE m_OriginalCurrentProcessToken;
@@ -43,9 +42,6 @@ public:
 	const HINSTANCE& Instance = this->m_Instance;
 	const std::wstring& ExePath = this->m_ExePath;
 	const std::wstring& AppPath = this->m_AppPath;
-
-	const std::map<std::wstring, std::wstring>& ShortCutList =
-		this->m_ShortCutList;
 
 	const HANDLE& OriginalCurrentProcessToken =
 		this->m_OriginalCurrentProcessToken;
@@ -87,41 +83,6 @@ public:
 				this->m_StringTranslations.insert(std::make_pair(
 					Key, M2MakeUTF16String(Value)));
 			}
-		}
-
-		try
-		{
-			std::ifstream FileStream(this->AppPath + L"\\NSudo.json");
-			if (FileStream.is_open())
-			{
-				using rapidjson::EncodedInputStream;
-				using rapidjson::IStreamWrapper;
-				using rapidjson::UTF8;
-
-				IStreamWrapper ISW(FileStream);
-				EncodedInputStream<UTF8<>, IStreamWrapper> EIS(ISW);
-
-				rapidjson::Document ConfigJSON;
-				ConfigJSON.ParseStream(EIS);
-
-				for (auto& Item : ConfigJSON["ShortCutList_V2"].GetObject())
-				{
-					std::string Key = std::string(
-						Item.name.GetString(),
-						Item.name.GetStringLength());
-					std::string Value = std::string(
-						Item.value.GetString(),
-						Item.value.GetStringLength());
-
-					this->m_ShortCutList.insert(std::make_pair(
-						M2MakeUTF16String(Key),
-						M2MakeUTF16String(Value)));
-				}
-			}
-		}
-		catch (const std::exception&)
-		{
-
 		}
 
 		M2::CHandle CurrentProcessToken;
@@ -248,213 +209,9 @@ std::vector<std::wstring> NSudoSplitCommandLine(LPCWSTR lpCommandLine)
 	return result;
 }
 
-typedef struct _NSUDO_CONTEXT_MENU_ITEM
-{
-	std::wstring ItemName;
-	std::wstring ItemDescription;
-	std::wstring ItemCommandParameters;
-	bool HasLUAShield;
-} NSUDO_CONTEXT_MENU_ITEM, *PNSUDO_CONTEXT_MENU_ITEM;
-
-class CNSudoContextMenuManagement
-{
-private:
-	DWORD m_ConstructorError = ERROR_SUCCESS;
-
-	std::wstring m_NSudoPath;
-	M2::CHKey m_CommandStoreRoot;
-
-	std::vector<NSUDO_CONTEXT_MENU_ITEM> m_ContextMenuItems;
-
-public:
-	CNSudoContextMenuManagement()
-	{
-		this->m_ConstructorError = M2GetWindowsDirectory(this->m_NSudoPath);		
-		if (FAILED(this->m_ConstructorError))
-		{
-			return;
-		}
-		this->m_NSudoPath.append(L"\\NSudo.exe");
-		
-		this->m_ConstructorError = RegOpenKeyExW(
-			HKEY_LOCAL_MACHINE,
-			L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\CommandStore\\shell",
-			0,
-			KEY_ALL_ACCESS | KEY_WOW64_64KEY,
-			&this->m_CommandStoreRoot);
-		if (ERROR_SUCCESS != this->m_ConstructorError)
-			return;
-
-		rapidjson::Document ContextMenuJSON;
-
-		M2_RESOURCE_INFO ResourceInfo = { 0 };
-		if (SUCCEEDED(M2LoadResource(
-			&ResourceInfo,
-			GetModuleHandleW(nullptr),
-			L"Config",
-			MAKEINTRESOURCEW(IDR_CONFIG_CONTEXT_MENU))))
-		{
-			ContextMenuJSON.Parse(
-				reinterpret_cast<const char*>(ResourceInfo.Pointer),
-				ResourceInfo.Size);
-
-			for (auto& Item : ContextMenuJSON["ContextMenu"].GetArray())
-			{
-				auto& ItemName = Item["ItemName"];
-				auto& ItemDescriptionID = Item["ItemDescriptionID"];
-				auto& ItemCommandParameters = Item["ItemCommandParameters"];
-
-				std::string RawItemName = std::string(
-					ItemName.GetString(),
-					ItemName.GetStringLength());
-				std::string RawItemDescriptionID = std::string(
-					ItemDescriptionID.GetString(),
-					ItemDescriptionID.GetStringLength());
-				std::string RawItemCommandParameters = std::string(
-					ItemCommandParameters.GetString(),
-					ItemCommandParameters.GetStringLength());
-				bool HasLUAShield = Item["HasLUAShield"].GetBool();
-
-				NSUDO_CONTEXT_MENU_ITEM ContextMenuItem;
-
-				ContextMenuItem.ItemName = M2MakeUTF16String(RawItemName);
-
-				ContextMenuItem.ItemDescription =
-					g_ResourceManagement.GetTranslation(
-						RawItemDescriptionID);
-
-				ContextMenuItem.ItemCommandParameters = M2MakeUTF16String(
-					RawItemCommandParameters);
-
-				ContextMenuItem.HasLUAShield = HasLUAShield;
-
-				this->m_ContextMenuItems.push_back(ContextMenuItem);
-			}
-		}
-	}
-
-	DWORD Install()
-	{
-		if (ERROR_SUCCESS != this->m_ConstructorError)
-			return this->m_ConstructorError;
-
-		CopyFileW(
-			M2GetCurrentProcessModulePath().c_str(),
-			this->m_NSudoPath.c_str(),
-			FALSE);
-
-		DWORD dwError = ERROR_SUCCESS;
-
-		std::wstring NSudoPathWithQuotation =
-			std::wstring(L"\"") + this->m_NSudoPath + L"\"";
-
-		M2::CHKey hNSudoItem;
-		std::wstring SubCommands;
-
-		for (NSUDO_CONTEXT_MENU_ITEM Item : this->m_ContextMenuItems)
-		{
-			std::wstring GeneratedItemCommand =
-				NSudoPathWithQuotation +
-				L" " + Item.ItemCommandParameters + L" " +
-				L"%1";
-
-			dwError = CreateCommandStoreItem(
-				this->m_CommandStoreRoot,
-				Item.ItemName.c_str(),
-				Item.ItemDescription.c_str(),
-				GeneratedItemCommand.c_str(),
-				Item.HasLUAShield);
-			if (ERROR_SUCCESS != dwError)
-				return dwError;
-
-			SubCommands += Item.ItemName + L";";
-		}
-
-		dwError = M2RegCreateKey(
-			HKEY_CLASSES_ROOT,
-			L"*\\shell\\NSudo",
-			KEY_ALL_ACCESS | KEY_WOW64_64KEY,
-			&hNSudoItem);
-		if (ERROR_SUCCESS != dwError)
-			return dwError;
-
-		struct
-		{
-			LPCWSTR lpValueName;
-			LPCWSTR lpValueData;
-		} ValueList[] =
-		{
-			{
-				L"SubCommands",
-				SubCommands.c_str()
-			},{
-				L"MUIVerb",
-				L"NSudo"
-			},{
-				L"Icon",
-				NSudoPathWithQuotation.c_str()
-			},{
-				L"Position",
-				L"1"
-			}
-		};
-
-		for (size_t i = 0; i < sizeof(ValueList) / sizeof(*ValueList); ++i)
-		{
-			dwError = M2RegSetStringValue(
-				hNSudoItem,
-				ValueList[i].lpValueName,
-				ValueList[i].lpValueData);
-			if (ERROR_SUCCESS != dwError)
-				return dwError;
-
-		}
-
-		return dwError;
-	}
-
-	DWORD Uninstall()
-	{
-		if (ERROR_SUCCESS != this->m_ConstructorError)
-			return this->m_ConstructorError;
-
-		// 首先去除只读，然后删除文件，如果失败，则要求系统重启后删除
-		DWORD AttributesBackup = GetFileAttributesW(this->m_NSudoPath.c_str());
-		SetFileAttributesW(
-			this->m_NSudoPath.c_str(),
-			AttributesBackup & (-1 ^ FILE_ATTRIBUTE_READONLY));
-		if (!DeleteFileW(this->m_NSudoPath.c_str()))
-		{
-			MoveFileExW(
-				this->m_NSudoPath.c_str(),
-				nullptr,
-				MOVEFILE_DELAY_UNTIL_REBOOT);
-		}
-
-		DWORD dwError = ERROR_SUCCESS;
-
-		for (NSUDO_CONTEXT_MENU_ITEM Item : this->m_ContextMenuItems)
-		{
-			dwError = RegDeleteTreeW(
-				this->m_CommandStoreRoot,
-				Item.ItemName.c_str());
-			if (ERROR_SUCCESS != dwError)
-				break;
-		}
-
-		dwError = RegDeleteTreeW(
-			HKEY_CLASSES_ROOT,
-			L"*\\shell\\NSudo");
-
-		return dwError;
-	}
-
-};
-
 // 解析命令行
 NSUDO_MESSAGE NSudoCommandLineParser(
 	_In_ bool bElevated,
-	_In_ bool bEnableContextMenuManagement,
 	_In_ std::wstring& ApplicationName,
 	_In_ std::map<std::wstring, std::wstring>& OptionsAndParameters,
 	_In_ std::wstring& UnresolvedCommandLine)
@@ -480,29 +237,6 @@ NSUDO_MESSAGE NSudoCommandLineParser(
 		}
 		else
 		{
-			if (bEnableContextMenuManagement)
-			{
-				CNSudoContextMenuManagement ContextMenuManagement;
-
-				if (0 == _wcsicmp(OptionAndParameter.first.c_str(), L"Install"))
-				{
-					// 如果参数是 /Install 或 -Install，则安装NSudo到系统
-					if (ERROR_SUCCESS != ContextMenuManagement.Install())
-					{
-						ContextMenuManagement.Uninstall();
-					}
-
-					return NSUDO_MESSAGE::SUCCESS;
-				}
-				else if (0 == _wcsicmp(OptionAndParameter.first.c_str(), L"Uninstall"))
-				{
-					// 如果参数是 /Uninstall 或 -Uninstall，则移除安装到系统的NSudo
-					ContextMenuManagement.Uninstall();
-
-					return NSUDO_MESSAGE::SUCCESS;
-				}
-			}
-
 			return NSUDO_MESSAGE::INVALID_COMMAND_PARAMETER;
 		}
 	}
@@ -912,23 +646,9 @@ NSUDO_MESSAGE NSudoCommandLineParser(
 		return NSUDO_MESSAGE::INVALID_COMMAND_PARAMETER;
 	}
 
-	std::wstring final_command_line;
-
-	std::map<std::wstring, std::wstring>::const_iterator iterator =
-		g_ResourceManagement.ShortCutList.find(UnresolvedCommandLine);
-
-	if (g_ResourceManagement.ShortCutList.end() != iterator)
-	{
-		final_command_line = iterator->second;
-	}
-	else
-	{
-		final_command_line = UnresolvedCommandLine;
-	}
-
 	if (!NSudoCreateProcessDirect(
 		hToken,
-		final_command_line.c_str(),
+		UnresolvedCommandLine.c_str(),
 		CurrentDirectory.c_str(),
 		WaitInterval, 
 		ProcessPriority,
@@ -1472,22 +1192,11 @@ int NSudoMain()
 		return 0;
 	}
 
-#if defined(NSUDO_CUI_CONSOLE)
 	NSUDO_MESSAGE message = NSudoCommandLineParser(
 		g_ResourceManagement.IsElevated,
-		false,
 		ApplicationName,
 		OptionsAndParameters,
 		UnresolvedCommandLine);
-#endif
-#if defined(NSUDO_CUI_WINDOWS) || defined(NSUDO_GUI_WINDOWS)
-	NSUDO_MESSAGE message = NSudoCommandLineParser(
-		g_ResourceManagement.IsElevated,
-		true,
-		ApplicationName,
-		OptionsAndParameters,
-		UnresolvedCommandLine);
-#endif
 
 	if (NSUDO_MESSAGE::NEED_TO_SHOW_COMMAND_LINE_HELP == message)
 	{

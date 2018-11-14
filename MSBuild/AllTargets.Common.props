@@ -11,10 +11,6 @@
       <AdditionalLibraryDirectories>$(OutDir)</AdditionalLibraryDirectories>
 	  <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
-    <PostBuildEvent>
-      <Message>复制配置文件</Message>
-      <Command>xcopy /r /s /y $(ProjectDir)Resources\NSudo.json $(TargetDir)</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Platform)'=='ARM'">
     <Link>
