@@ -128,9 +128,9 @@ For example:
 > NSudo -U:T cmd /c "dir "C:\Program Files" & pause"
 
 ## 3rd-party libraries which used
-- RapidJSON
-  - Copyright: Tencent and Milo Yip
-  - License: https://github.com/Tencent/rapidjson/blob/master/license.txt
+- cpptoml
+  - Copyright: Chase Geigle
+  - License: https://github.com/skystrife/cpptoml/blob/master/LICENSE
 - (Optional) VC-LTL
   - Copyright: Chuyu Team
   - License: https://github.com/Chuyu-Team/VC-LTL/blob/master/LICENSE.txt

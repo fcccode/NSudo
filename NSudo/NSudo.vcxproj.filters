@@ -33,14 +33,14 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\en\Translations.json">
-      <Filter>Resources\en</Filter>
-    </None>
-    <None Include="Resources\zh-Hans\Translations.json">
-      <Filter>Resources\zh-Hans</Filter>
-    </None>
     <None Include="Resources\NSudo.xcf">
       <Filter>Resources</Filter>
+    </None>
+    <None Include="Resources\en\Translations.toml">
+      <Filter>Resources\en</Filter>
+    </None>
+    <None Include="Resources\zh-Hans\Translations.toml">
+      <Filter>Resources\zh-Hans</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>

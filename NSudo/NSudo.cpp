@@ -58,7 +58,7 @@ public:
 		wcsrchr(&this->m_AppPath[0], L'\\')[0] = L'\0';
 		this->m_AppPath.resize(wcslen(this->m_AppPath.c_str()));
 
-		rapidjson::Document StringTranslationsJSON;
+	
 
 		M2_RESOURCE_INFO ResourceInfo = { 0 };
 		if (SUCCEEDED(M2LoadResource(
@@ -67,21 +67,13 @@ public:
 			L"String",
 			MAKEINTRESOURCEW(IDR_String_Translations))))
 		{
-			StringTranslationsJSON.Parse(
-				reinterpret_cast<const char*>(ResourceInfo.Pointer),
-				ResourceInfo.Size);
+			auto stream = std::istringstream(std::string(reinterpret_cast<const char*>(ResourceInfo.Pointer) + 3, ResourceInfo.Size - 3));
+			auto x = cpptoml::parser(stream).parse()->get_table("Translations");
 
-			for (auto& Item : StringTranslationsJSON["Translations"].GetObject())
+			for (auto& Item : *x)
 			{
-				std::string Key = std::string(
-					Item.name.GetString(),
-					Item.name.GetStringLength());
-				std::string Value = std::string(
-					Item.value.GetString(),
-					Item.value.GetStringLength());
-
 				this->m_StringTranslations.insert(std::make_pair(
-					Key, M2MakeUTF16String(Value)));
+					Item.first, M2MakeUTF16String(Item.second->as<std::string>()->get())));
 			}
 		}
 
